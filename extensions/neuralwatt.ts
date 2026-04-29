@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -161,15 +161,31 @@ async function saveModelsPayload(payload: unknown): Promise<void> {
   await writeFile(CACHE_FILE, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+async function cacheFileExists(): Promise<boolean> {
+  try {
+    await access(CACHE_FILE);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function loadCachedModels(): Promise<PiModel[]> {
   const payload = JSON.parse(await readFile(CACHE_FILE, "utf8")) as unknown;
   return modelsFromPayload(payload, CACHE_FILE);
 }
 
-async function fetchAndCacheNeuralWattModels(signal?: AbortSignal): Promise<PiModel[]> {
-  const apiKey = process.env[API_KEY_ENV];
-  if (!apiKey) throw new Error(`${API_KEY_ENV} is not set`);
+async function getNeuralWattApiKey(ctx?: Pick<ExtensionCommandContext, "modelRegistry">): Promise<string> {
+  const envApiKey = process.env[API_KEY_ENV];
+  if (envApiKey) return envApiKey;
 
+  const storedApiKey = await ctx?.modelRegistry.getApiKeyForProvider(PROVIDER);
+  if (storedApiKey) return storedApiKey;
+
+  throw new Error(`Missing NeuralWatt credentials. Run /login ${PROVIDER} or set ${API_KEY_ENV}.`);
+}
+
+async function fetchAndCacheNeuralWattModels(apiKey: string, signal?: AbortSignal): Promise<PiModel[]> {
   const payload = await fetchJson(apiKey, signal);
   await saveModelsPayload(payload);
   return loadCachedModels();
@@ -187,17 +203,20 @@ function registerNeuralWattProvider(pi: ExtensionAPI, models: PiModel[]) {
   });
 }
 
-async function update(pi: ExtensionAPI, ctx?: ExtensionCommandContext): Promise<number> {
+async function update(pi: ExtensionAPI, ctx?: ExtensionCommandContext, notify = true): Promise<number> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
 
   try {
-    const models = await fetchAndCacheNeuralWattModels(controller.signal);
+    const apiKey = await getNeuralWattApiKey(ctx);
+    const models = await fetchAndCacheNeuralWattModels(apiKey, controller.signal);
     registerNeuralWattProvider(pi, models);
-    ctx?.ui.notify(
-      `NeuralWatt: saved ${CACHE_FILE} and registered ${models.length} model(s). Open /model and choose provider '${PROVIDER}'.`,
-      "success",
-    );
+    if (notify) {
+      ctx?.ui.notify(
+        `NeuralWatt: saved ${CACHE_FILE} and registered ${models.length} model(s). Open /model and choose provider '${PROVIDER}'.`,
+        "success",
+      );
+    }
     return models.length;
   } finally {
     clearTimeout(timeout);
@@ -205,11 +224,7 @@ async function update(pi: ExtensionAPI, ctx?: ExtensionCommandContext): Promise<
 }
 
 export default async function neuralWattExtension(pi: ExtensionAPI) {
-  if (!process.env[API_KEY_ENV]) {
-    pi.unregisterProvider(PROVIDER);
-    return;
-  }
-
+  let initialAutoUpdateAttempted = false;
   pi.registerCommand("nw-update", {
     description: "Fetch NeuralWatt models and register/update the neuralwatt provider",
     handler: async (_args, ctx) => {
@@ -222,13 +237,30 @@ export default async function neuralWattExtension(pi: ExtensionAPI) {
     },
   });
 
+  pi.on("session_start", async (_event, ctx) => {
+    if (initialAutoUpdateAttempted) return;
+    initialAutoUpdateAttempted = true;
+    if (await cacheFileExists()) return;
+
+    try {
+      await update(pi, ctx, false);
+      ctx.ui.notify(`NeuralWatt: fetched models automatically on first run.`, "success");
+    } catch (error) {
+      console.warn(
+        `[neuralwatt] automatic initial model fetch skipped. ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
+
   // Register from the persisted /models JSON at startup so Pi doesn't hit the network on every launch.
-  // Run /nw-update to refresh ~/.pi/agent/neuralwatt-models.json from NeuralWatt.
+  // If there is no cache yet, still register the provider so /login works like standard Pi providers.
+  // Run /nw-update after /login to fetch ~/.pi/agent/neuralwatt-models.json from NeuralWatt.
   try {
     registerNeuralWattProvider(pi, await loadCachedModels());
   } catch (error) {
+    registerNeuralWattProvider(pi, []);
     console.warn(
-      `[neuralwatt] no cached models loaded from ${CACHE_FILE}. Run /nw-update to fetch them. ${
+      `[neuralwatt] no cached models loaded from ${CACHE_FILE}. Provider still registered for /login. Run /nw-update after authenticating. ${
         error instanceof Error ? error.message : String(error)
       }`,
     );

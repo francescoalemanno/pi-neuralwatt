@@ -2,15 +2,14 @@
 
 A global [Pi](https://github.com/badlogic/pi-mono) package that integrates NeuralWatt models into Pi.
 
-When `NEURALWATT_API_KEY` is set, the extension:
+The extension:
 
+- registers the NeuralWatt provider under the Pi provider name `neuralwatt`;
+- supports credentials via `/login neuralwatt` or `NEURALWATT_API_KEY`;
 - registers the `/nw-update` command;
 - fetches `GET https://api.neuralwatt.com/v1/models` when `/nw-update` is run;
 - persists the raw models response to `~/.pi/agent/neuralwatt-models.json`;
-- loads model configuration from that cached JSON on Pi startup;
-- registers the models under the Pi provider name `neuralwatt`.
-
-If `NEURALWATT_API_KEY` is not set, the extension does not register `/nw-update` and does not register the provider.
+- loads model configuration from that cached JSON on Pi startup.
 
 ## Install
 
@@ -26,13 +25,19 @@ pi -e git:github.com/francescoalemanno/pi-neuralwatt
 
 ## Setup
 
-Export your NeuralWatt API key before starting Pi:
+Authenticate with either Pi's standard login flow:
+
+```text
+/login neuralwatt
+```
+
+or an environment variable:
 
 ```bash
 export NEURALWATT_API_KEY="your-api-key"
 ```
 
-Then start Pi and refresh the model cache:
+On first authenticated run, the extension will try to fetch the model cache automatically once. You can also refresh it manually anytime with:
 
 ```text
 /nw-update
@@ -54,7 +59,7 @@ The raw `/models` response is stored at:
 ~/.pi/agent/neuralwatt-models.json
 ```
 
-Pi startup reads this file to register models without hitting the network every time. Run `/nw-update` again to refresh it.
+Pi startup reads this file to register models without hitting the network every time. On a first install, run `/login neuralwatt` (or set `NEURALWATT_API_KEY`) and the extension will try to populate it automatically once. Run `/nw-update` anytime to refresh it.
 
 ## License
 
