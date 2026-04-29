@@ -1,0 +1,23 @@
+{
+  "name": "pi-neuralwatt",
+  "version": "0.1.0",
+  "description": "Pi extension that registers NeuralWatt models from the /v1/models endpoint.",
+  "license": "MIT",
+  "author": "Francesco Alemanno <francescoalemanno710@gmail.com>",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "neuralwatt",
+    "llm",
+    "models"
+  ],
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./extensions/neuralwatt.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  }
+}
