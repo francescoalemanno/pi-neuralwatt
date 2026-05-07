@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -175,7 +175,7 @@ async function loadCachedModels(): Promise<PiModel[]> {
   return modelsFromPayload(payload, CACHE_FILE);
 }
 
-async function getNeuralWattApiKey(ctx?: Pick<ExtensionCommandContext, "modelRegistry">): Promise<string> {
+async function getNeuralWattApiKey(ctx?: Pick<ExtensionContext, "modelRegistry">): Promise<string> {
   const envApiKey = process.env[API_KEY_ENV];
   if (envApiKey) return envApiKey;
 
@@ -203,7 +203,7 @@ function registerNeuralWattProvider(pi: ExtensionAPI, models: PiModel[]) {
   });
 }
 
-async function update(pi: ExtensionAPI, ctx?: ExtensionCommandContext, notify = true): Promise<number> {
+async function update(pi: ExtensionAPI, ctx?: Pick<ExtensionContext, "modelRegistry" | "ui">, notify = true): Promise<number> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
 
@@ -214,7 +214,7 @@ async function update(pi: ExtensionAPI, ctx?: ExtensionCommandContext, notify = 
     if (notify) {
       ctx?.ui.notify(
         `NeuralWatt: saved ${CACHE_FILE} and registered ${models.length} model(s). Open /model and choose provider '${PROVIDER}'.`,
-        "success",
+        "info",
       );
     }
     return models.length;
@@ -244,7 +244,7 @@ export default async function neuralWattExtension(pi: ExtensionAPI) {
 
     try {
       await update(pi, ctx, false);
-      ctx.ui.notify(`NeuralWatt: fetched models automatically on first run.`, "success");
+      ctx.ui.notify(`NeuralWatt: fetched models automatically on first run.`, "info");
     } catch (error) {
       console.warn(
         `[neuralwatt] automatic initial model fetch skipped. ${error instanceof Error ? error.message : String(error)}`,
