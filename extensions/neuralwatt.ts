@@ -17,6 +17,7 @@ type PiModel = {
 
 const PROVIDER = "neuralwatt";
 const API_KEY_ENV = "NEURALWATT_API_KEY";
+const API_KEY_ENV_REF = `$${API_KEY_ENV}`;
 const BASE_URL = "https://api.neuralwatt.com/v1";
 const MODELS_URL = `${BASE_URL}/models`;
 const CACHE_FILE = join(homedir(), ".pi", "agent", "neuralwatt-models.json");
@@ -194,10 +195,10 @@ async function fetchAndCacheNeuralWattModels(apiKey: string, signal?: AbortSigna
 function registerNeuralWattProvider(pi: ExtensionAPI, models: PiModel[]) {
   pi.registerProvider(PROVIDER, {
     baseUrl: BASE_URL,
-    apiKey: API_KEY_ENV,
+    apiKey: API_KEY_ENV_REF,
     api: "openai-completions",
     headers: {
-      "x-api-key": API_KEY_ENV,
+      "x-api-key": API_KEY_ENV_REF,
     },
     models,
   });
