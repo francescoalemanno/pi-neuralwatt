@@ -13,6 +13,9 @@ type PiModel = {
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
   contextWindow: number;
   maxTokens: number;
+  compat: {
+    supportsDeveloperRole: false;
+  };
 };
 
 const PROVIDER = "neuralwatt";
@@ -107,6 +110,12 @@ function normalizeModel(raw: unknown): PiModel | undefined {
       128000,
     ),
     maxTokens: pickNumber({ ...limits, ...model }, ["maxTokens", "max_tokens", "max_output_tokens", "output_token_limit"], 16384),
+    // NeuralWatt's OpenAI-compatible endpoint rejects the OpenAI `developer` role
+    // for models such as zai-org/GLM-5.1-FP8. Tell pi to serialize system
+    // instructions with the broadly supported `system` role instead.
+    compat: {
+      supportsDeveloperRole: false,
+    },
   };
 }
 
